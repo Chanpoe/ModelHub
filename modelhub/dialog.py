@@ -63,7 +63,7 @@ class Dialog(ABC):
 
         return total_tokens
 
-    def send(self, message: str = None, base64_image_list=None, image_url_list=None):
+    def send(self, message: str = "", base64_image_list=None, image_url_list=None):
         """
         发送消息到模型并获取回复
         :param message: 用户发送的消息
@@ -71,15 +71,16 @@ class Dialog(ABC):
         :param image_url_list:
         :return: 模型的回复
         """
-        # 添加图片消息到上下文
+        # 如果新消息有图片
         if base64_image_list or image_url_list:
-            if base64_image_list:
-                self.context.add_image_message(base64_image_list=base64_image_list)
-            if image_url_list:
-                self.context.add_image_message(image_url_list=image_url_list)
+            self.context.add_image_message(
+                text_content=message,
+                base64_image_list=base64_image_list,
+                image_url_list=image_url_list
+            )
 
-        # 如果有新消息才添加
-        if message:
+        # 如果有新消息且没有图片，添加用户消息到上下文
+        if message and not base64_image_list and not image_url_list:
             # 添加用户消息到上下文
             self.context.add_user_message(message)
 
