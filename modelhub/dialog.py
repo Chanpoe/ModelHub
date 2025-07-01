@@ -83,8 +83,18 @@ class Dialog(ABC):
             # 添加用户消息到上下文
             self.context.add_user_message(message)
 
+        # 适配openai SDK图片消息和文本消息
+        messages = []
+        for m in self.context.messages:
+            # 文本消息
+            if isinstance(m.get("content"), str):
+                messages.append({"role": m["role"], "content": m["content"]})
+            # 图片消息（content为list，且含有type=image_url）
+            elif isinstance(m.get("content"), list):
+                messages.append({"role": m["role"], "content": m["content"]})
+
         chat_completion = self.client.chat.completions.create(
-            messages=self.context.messages,
+            messages=messages,
             model=self.model_name,
             top_p=self.top_p,
             temperature=self.temperature,
