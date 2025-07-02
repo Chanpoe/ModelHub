@@ -12,6 +12,7 @@ wheels/
 # Ignore files
 .env
 *.log
+/uv.lock
 
 # Ignore folders
 .idea/
