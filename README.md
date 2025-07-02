@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-**ModelHub** 致力于打造一个"大模型聚合接口 all in one"平台，统一整合各大主流模型平台（如 OpenAI、OpenRouter、火山方舟、DMX、GPTsAPI 等），为开发者和企业提供统一、便捷的 API 调用体验。  
+**ModelHub** 致力于打造一个"大模型聚合接口 all in one"平台，统一整合各大主流模型平台（如 OpenAI、OpenRouter、火山方舟、DMX 等），为开发者和企业提供统一、便捷的 API 调用体验。  
 本项目以 OpenAI SDK 兼容为主，对于不兼容 OpenAI SDK 的平台，单独实现适配，最大程度降低多平台接入和切换的开发成本。
 
 ---
@@ -51,13 +51,12 @@ OPENAI_API_KEY=你的OpenAI密钥
 OPENROUTER_API_KEY=你的OpenRouter密钥
 VOLC_API_KEY=你的火山方舟密钥
 DMX_API_KEY=你的DMX密钥
-GPTS_API_KEY=你的GPTsAPI密钥
 ```
 
 ### 3. 示例代码
 
 ```python
-from modelhub.dialog import OpenAIDialog, OpenRouterDialog, VolcDialog, DMXDialog, GPTsAPIDialog
+from modelhub.dialog import OpenAIDialog, OpenRouterDialog, VolcDialog, DMXDialog
 
 # 以OpenAI为例
 dialog = OpenAIDialog(model_name="gpt-3.5-turbo", system_prompt="你是一个智能助手。")
@@ -69,12 +68,11 @@ print(response)
 
 ## 支持的平台
 
-- [x] OpenAI
-- [x] OpenRouter
-- [x] 火山方舟（Volcengine）
-- [x] DMX
-- [x] GPTsAPI
-- [ ] 其他平台（欢迎贡献）
+- ✅ OpenAI
+- ✅ OpenRouter
+- ✅ 火山方舟（Volcengine）
+- ✅ DMX
+- 📋 其他平台（欢迎贡献）
 
 ---
 
