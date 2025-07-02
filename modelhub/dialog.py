@@ -11,7 +11,7 @@ load_dotenv()
 
 
 class Dialog(ABC):
-    def __init__(self, model_name: str, system_prompt: str = ""):
+    def __init__(self, model_name: str):
         self.model_name = model_name
         self.api_key = None
         self.top_p = 1
@@ -117,7 +117,7 @@ class Dialog(ABC):
 
 class OpenRouterDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name, system_prompt)
+        super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
         # 初始化OpenAI同步客户端
         self._client = OpenAI(
@@ -136,7 +136,7 @@ class OpenRouterDialog(Dialog):
 
 class OpenAIDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name, system_prompt)
+        super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
         # 初始化OpenAI异步客户端
         self._client = OpenAI(
@@ -154,7 +154,7 @@ class OpenAIDialog(Dialog):
 
 class GPTsAPIDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name, system_prompt)
+        super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
         # 初始化OpenAI异步客户端
         self._client = OpenAI(
@@ -174,7 +174,7 @@ class GPTsAPIDialog(Dialog):
 
 class VolcDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name, system_prompt)
+        super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
         # 初始化OpenAI异步客户端
         self._client = OpenAI(
@@ -200,7 +200,7 @@ class DMXDialog(Dialog):
         :param system_prompt:
         :param area: 地区，默认cn
         """
-        super().__init__(model_name, system_prompt)
+        super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
         # 初始化OpenAI同步客户端
         self._client = OpenAI(
