@@ -37,8 +37,57 @@ README.md          # 项目说明
 
 建议使用 Python 3.12 及以上版本。
 
+#### 方式一：使用 conda
+
+1. 创建新的 conda 虚拟环境：
+
+```bash
+conda create -n model_hub python=3.12
+conda activate model_hub
+```
+
+2. 克隆仓库：
+
+```bash
+git clone https://github.com/Chanpoe/ModelHub.git
+cd ModelHub
+```
+
+3. 安装依赖：
+
 ```bash
 pip install -r requirements.txt
+# 或者使用 pyproject.toml 进行依赖管理
+```
+
+#### 方式二：使用 uv（推荐）
+
+1. 安装 uv（一个快速的 Python 包管理器）：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. 克隆仓库：
+
+```bash
+git clone https://github.com/Chanpoe/ModelHub.git
+cd ModelHub
+```
+
+3. 创建并激活虚拟环境：
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate  # Unix/macOS 系统
+# Windows 系统使用：
+# .venv\Scripts\activate
+```
+
+4. 安装依赖：
+
+```bash
+uv pip install -r requirements.txt
 # 或者使用 pyproject.toml 进行依赖管理
 ```
 
