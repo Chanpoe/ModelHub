@@ -143,18 +143,17 @@ class Dialog(ABC):
         return res
 
 
-class OpenRouterDialog(Dialog):
-    def __init__(self, model_name: str, system_prompt: str = ""):
+class GenericDialog(Dialog):
+    def __init__(self, model_name: str, system_prompt: str = "", api_key_env: str = None, base_url: str = None):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        self._client = OpenAI(
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1"
-        )
-        self._async_client = AsyncOpenAI(
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1"
-        )
+        api_key = os.getenv(api_key_env) if api_key_env else None
+        if base_url:
+            self._client = OpenAI(api_key=api_key, base_url=base_url)
+            self._async_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        else:
+            self._client = OpenAI(api_key=api_key)
+            self._async_client = AsyncOpenAI(api_key=api_key)
 
     @property
     def context(self):
@@ -169,81 +168,44 @@ class OpenRouterDialog(Dialog):
         return self._async_client
 
 
-class OpenAIDialog(Dialog):
+class OpenRouterDialog(GenericDialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name)
-        self._context = OpenAIContext(system_prompt=system_prompt)
-        self._client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-        self._async_client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
+        super().__init__(
+            model_name=model_name,
+            system_prompt=system_prompt,
+            api_key_env="OPENROUTER_API_KEY",
+            base_url="https://openrouter.ai/api/v1"
         )
 
-    @property
-    def context(self):
-        return self._context
 
-    @property
-    def client(self):
-        return self._client
-
-    @property
-    def async_client(self):
-        return self._async_client
-
-
-class VolcDialog(Dialog):
+class OpenAIDialog(GenericDialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name)
-        self._context = OpenAIContext(system_prompt=system_prompt)
-        self._client = OpenAI(
-            api_key=os.getenv("VOLC_API_KEY"),
-            base_url="https://ark.cn-beijing.volces.com/api/v3"
+        super().__init__(
+            model_name=model_name,
+            system_prompt=system_prompt,
+            api_key_env="OPENAI_API_KEY"
         )
-        self._async_client = AsyncOpenAI(
-            api_key=os.getenv("VOLC_API_KEY"),
+
+
+class VolcDialog(GenericDialog):
+    def __init__(self, model_name: str, system_prompt: str = ""):
+        super().__init__(
+            model_name=model_name,
+            system_prompt=system_prompt,
+            api_key_env="VOLC_API_KEY",
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
 
-    @property
-    def context(self):
-        return self._context
 
-    @property
-    def client(self):
-        return self._client
-
-    @property
-    def async_client(self):
-        return self._async_client
-
-
-class DMXDialog(Dialog):
+class DMXDialog(GenericDialog):
     def __init__(self, model_name: str, system_prompt: str = "", area: str = 'cn'):
-        super().__init__(model_name)
-        self._context = OpenAIContext(system_prompt=system_prompt)
         base_url = "https://www.dmxapi.cn/v1" if area == 'cn' else "https://www.dmxapi.com/v1"
-        self._client = OpenAI(
-            api_key=os.getenv("DMX_API_KEY"),
+        super().__init__(
+            model_name=model_name,
+            system_prompt=system_prompt,
+            api_key_env="DMX_API_KEY",
             base_url=base_url
         )
-        self._async_client = AsyncOpenAI(
-            api_key=os.getenv("DMX_API_KEY"),
-            base_url=base_url
-        )
-
-    @property
-    def context(self):
-        return self._context
-
-    @property
-    def client(self):
-        return self._client
-
-    @property
-    def async_client(self):
-        return self._async_client
 
 
 if __name__ == '__main__':
