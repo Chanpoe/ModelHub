@@ -35,35 +35,35 @@ class Dialog(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def async_client(self) -> AsyncOpenAI:
+        """
+        异步对话使用的客户端
+        :return: 异步OpenAI客户端实例
+        """
+        pass
+
     def get_token_count(self) -> int:
         """
         计算当前上下文中的token使用量
         :return: token总数
         """
-        # 初始化tiktoken编码器
         encoding = tiktoken.encoding_for_model(self.model_name)
         total_tokens = 0
-
-        # 遍历所有消息
         for message in self.context.messages:
-            # 处理文本消息
             if message.get("role"):
-                # 计算角色名的token
                 total_tokens += len(encoding.encode(message["role"]))
-                # 计算内容的token
                 if isinstance(message.get("content"), str):
                     total_tokens += len(encoding.encode(message["content"]))
-
-            # 处理图片消息
-            if message.get("type") == "image_url_list":
-                # 图片消息按照OpenAI的计算方式
-                # 高清图片消费65元/百万token，标准图片消费8.5元/百万token
-                # 这里按照标准图片计算，每张图片算作85个token
-                total_tokens += 85
-
+            # 更健壮地处理图片消息
+            if isinstance(message.get("content"), list):
+                for item in message["content"]:
+                    if item.get("type") == "image_url":
+                        total_tokens += 85
         return total_tokens
 
-    def send(self, message: str = "", base64_image_list=None, image_url_list=None):
+    def send(self, message: str = "", base64_image_list: list = None, image_url_list: list = None) -> str:
         """
         发送消息到模型并获取回复
         :param message: 用户发送的消息
@@ -78,39 +78,67 @@ class Dialog(ABC):
                 base64_image_list=base64_image_list,
                 image_url_list=image_url_list
             )
-
         # 如果有新消息且没有图片，添加用户消息到上下文
         if message and not base64_image_list and not image_url_list:
-            # 添加用户消息到上下文
-            self.context.add_user_message(message)
-
-        # 适配openai SDK图片消息和文本消息
+            self.context.add_user_message(content=message)
         messages = []
         for m in self.context.messages:
-            # 文本消息
             if isinstance(m.get("content"), str):
                 messages.append({"role": m["role"], "content": m["content"]})
-            # 图片消息（content为list，且含有type=image_url）
             elif isinstance(m.get("content"), list):
                 messages.append({"role": m["role"], "content": m["content"]})
-
-        chat_completion = self.client.chat.completions.create(
-            messages=messages,
-            model=self.model_name,
-            top_p=self.top_p,
-            temperature=self.temperature,
-            # response_format="json",
-            # stream=True
-        )
+        # 检查API KEY
+        if not self.client.api_key:
+            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前模型: {self.model_name}")
         try:
+            chat_completion = self.client.chat.completions.create(
+                messages=messages,
+                model=self.model_name,
+                top_p=self.top_p,
+                temperature=self.temperature,
+            )
             res = chat_completion.choices[0].message.content
-        except:
+        except Exception as e:
+            print(f"[ERROR] 获取模型回复失败: {e}")
             res = ''
-        # for trunk in chat_completion:
-        #     res += trunk.choices[0].delta.content
-        # print()
+        self.context.add_assistant_message(res)
+        return res
 
-        # 添加模型回复到上下文
+    async def async_send(self, message: str = None, base64_image_list: list = None, image_url_list: list = None) -> str:
+        """
+        异步发送消息到模型并获取回复
+        :param message: 用户发送的消息
+        :param base64_image_list:
+        :param image_url_list:
+        :return: 模型的回复
+        """
+        if base64_image_list or image_url_list:
+            self.context.add_image_message(
+                text_content=message,
+                base64_image_list=base64_image_list,
+                image_url_list=image_url_list
+            )
+        if message and not base64_image_list and not image_url_list:
+            self.context.add_user_message(content=message)
+        messages = []
+        for m in self.context.messages:
+            if isinstance(m.get("content"), str):
+                messages.append({"role": m["role"], "content": m["content"]})
+            elif isinstance(m.get("content"), list):
+                messages.append({"role": m["role"], "content": m["content"]})
+        if not self.async_client.api_key:
+            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前模型: {self.model_name}")
+        try:
+            chat_completion = await self.async_client.chat.completions.create(
+                messages=messages,
+                model=self.model_name,
+                top_p=self.top_p,
+                temperature=self.temperature,
+            )
+            res = chat_completion.choices[0].message.content
+        except Exception as e:
+            print(f"[ERROR] 获取模型回复失败: {e}")
+            res = ''
         self.context.add_assistant_message(res)
         return res
 
@@ -119,8 +147,11 @@ class OpenRouterDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        # 初始化OpenAI同步客户端
         self._client = OpenAI(
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1"
+        )
+        self._async_client = AsyncOpenAI(
             api_key=os.getenv("OPENROUTER_API_KEY"),
             base_url="https://openrouter.ai/api/v1"
         )
@@ -133,13 +164,19 @@ class OpenRouterDialog(Dialog):
     def client(self):
         return self._client
 
+    @property
+    def async_client(self):
+        return self._async_client
+
 
 class OpenAIDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        # 初始化OpenAI异步客户端
         self._client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
+        self._async_client = AsyncOpenAI(
             api_key=os.getenv("OPENAI_API_KEY")
         )
 
@@ -151,37 +188,23 @@ class OpenAIDialog(Dialog):
     def client(self):
         return self._client
 
-
-class GPTsAPIDialog(Dialog):
-    def __init__(self, model_name: str, system_prompt: str = ""):
-        super().__init__(model_name)
-        self._context = OpenAIContext(system_prompt=system_prompt)
-        # 初始化OpenAI异步客户端
-        self._client = OpenAI(
-            api_key=os.getenv("GPTS_API_KEY"),
-            base_url="https://api.gptsapi.net/v1"
-        )
-        self.temperature = 1  # GPTs API使用openai o3模型时候只能设置 temperature = 1
-
     @property
-    def context(self):
-        return self._context
-
-    @property
-    def client(self):
-        return self._client
+    def async_client(self):
+        return self._async_client
 
 
 class VolcDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = ""):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        # 初始化OpenAI异步客户端
         self._client = OpenAI(
             api_key=os.getenv("VOLC_API_KEY"),
-            base_url="https://ark.cn-beijing.volces.com/api/v3/"
+            base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        self.temperature = 1  # GPTs API使用openai o3模型时候只能设置 temperature = 1
+        self._async_client = AsyncOpenAI(
+            api_key=os.getenv("VOLC_API_KEY"),
+            base_url="https://ark.cn-beijing.volces.com/api/v3"
+        )
 
     @property
     def context(self):
@@ -190,22 +213,24 @@ class VolcDialog(Dialog):
     @property
     def client(self):
         return self._client
+
+    @property
+    def async_client(self):
+        return self._async_client
 
 
 class DMXDialog(Dialog):
-    def __init__(self, model_name: str, system_prompt: str = "", area='cn'):
-        """
-        DMX 对话类，兼容 OpenAI SDK
-        :param model_name:
-        :param system_prompt:
-        :param area: 地区，默认cn
-        """
+    def __init__(self, model_name: str, system_prompt: str = "", area: str = 'cn'):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        # 初始化OpenAI同步客户端
+        base_url = "https://www.dmxapi.cn/v1" if area == 'cn' else "https://www.dmxapi.com/v1"
         self._client = OpenAI(
             api_key=os.getenv("DMX_API_KEY"),
-            base_url="https://www.dmxapi.cn/v1" if area == 'cn' else "https://www.dmxapi.com/v1"
+            base_url=base_url
+        )
+        self._async_client = AsyncOpenAI(
+            api_key=os.getenv("DMX_API_KEY"),
+            base_url=base_url
         )
 
     @property
@@ -215,22 +240,15 @@ class DMXDialog(Dialog):
     @property
     def client(self):
         return self._client
+
+    @property
+    def async_client(self):
+        return self._async_client
 
 
 if __name__ == '__main__':
     # 测试代码
-    # dialog = OpenRouterDialog(model_name="openai/o4-mini-high", system_prompt="解答用户问题")
-    # dialog = OpenAIDialog(model_name="o4-mini-2025-04-16", system_prompt="解答用户问题")
-    # dialog = GPTsAPIDialog(model_name="o4-mini", system_prompt="解答用户问题")
     dialog = VolcDialog(model_name='doubao-pro-256k-241115', system_prompt='解答用户问题')
-    # 添加图片消息
-    import base64
-
-    # with open('test.jpeg', 'rb') as f:
-    #     image_bytes = f.read()
-    #     pic_base64 = base64.b64encode(image_bytes).decode('utf-8')
-
-    # dialog.context.add_image_message(text_content='但丁真不是中国人但丁真是中国人，这句话怎么理解', base64_image=pic_base64)
     dialog.context.add_user_message(content='但丁真不是中国人但丁真是中国人，这句话怎么理解')
     dialog.send()
     print(dialog.context.messages)
