@@ -149,11 +149,14 @@ class GenericDialog(Dialog):
         self._context = OpenAIContext(system_prompt=system_prompt)
         api_key = os.getenv(api_key_env) if api_key_env else None
         if base_url:
-            self._client = OpenAI(api_key=api_key, base_url=base_url)
-            self._async_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            self._client = OpenAI(base_url=base_url)
+            self._async_client = AsyncOpenAI(base_url=base_url)
         else:
-            self._client = OpenAI(api_key=api_key)
-            self._async_client = AsyncOpenAI(api_key=api_key)
+            self._client = OpenAI()
+            self._async_client = AsyncOpenAI()
+        # 设置API Key，必须单独赋值否则OpenAI SDK会在初始化时读取OPENAI_API_KEY环境变量
+        self._client.api_key = api_key
+        self._async_client.api_key = api_key
 
     @property
     def context(self):
