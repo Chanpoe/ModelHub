@@ -1,4 +1,5 @@
 import os
+import re, json
 from abc import ABC, abstractmethod
 
 from dotenv import load_dotenv
@@ -63,13 +64,61 @@ class Dialog(ABC):
                         total_tokens += 85
         return total_tokens
 
-    def send(self, message: str = "", base64_image_list: list = None, image_url_list: list = None) -> str:
+    @staticmethod
+    def format_response_output(content: str) -> any:
         """
-        发送消息到模型并获取回复
-        :param message: 用户发送的消息
-        :param base64_image_list:
-        :param image_url_list:
-        :return: 模型的回复
+        提取和解析模型回复中的JSON结构，若解析失败则返回原始内容。
+        :param content: 模型回复内容
+        :return: 结构化字典或原始内容
+        """
+        def extract_json(text):
+            # 优先提取代码块里的内容
+            match = re.search(r"```json\s*([\s\S]*?)\s*```", text)
+            if match:
+                return match.group(1)
+            # 匹配数组或对象
+            match = re.search(r"(\[[\s\S]*\]|\{[\s\S]*\})", text)
+            if match:
+                return match.group(1)
+            return text
+        json_str = extract_json(content)
+        try:
+            res = json.loads(json_str)
+        except Exception as e:
+            print(f"[WARN] JSON解析失败，返回原始内容: {e}")
+            res = content
+        return res
+
+    def _get_chat_completion(self, messages):
+        """
+        同步请求模型回复
+        """
+        return self.client.chat.completions.create(
+            messages=messages,
+            model=self.model_name,
+            top_p=self.top_p,
+            temperature=self.temperature,
+        )
+
+    async def _get_chat_completion_async(self, messages):
+        """
+        异步请求模型回复
+        """
+        return await self.async_client.chat.completions.create(
+            messages=messages,
+            model=self.model_name,
+            top_p=self.top_p,
+            temperature=self.temperature,
+        )
+
+    def send(self, message: str = "", base64_image_list: list = None, image_url_list: list = None, format_output: bool = False) -> any:
+        """
+        发送消息到模型，并返回模型回复。
+        :param message: 用户消息
+        :param base64_image_list: base64编码图片列表
+        :param image_url_list: 图片url地址列表
+        :param format_output: 是否格式化输出，如果为True，则返回JSON格式，默认返回原始内容
+        :return: 模型回复或者JSON格式内容
         """
         # 如果新消息有图片
         if base64_image_list or image_url_list:
@@ -81,7 +130,10 @@ class Dialog(ABC):
         # 如果有新消息且没有图片，添加用户消息到上下文
         if message and not base64_image_list and not image_url_list:
             self.context.add_user_message(content=message)
+        # 构建消息列表
         messages = []
+        if format_output:
+            self.context.add_user_message('输出为JSON格式')
         for m in self.context.messages:
             if isinstance(m.get("content"), str):
                 messages.append({"role": m["role"], "content": m["content"]})
@@ -89,58 +141,66 @@ class Dialog(ABC):
                 messages.append({"role": m["role"], "content": m["content"]})
         # 检查API KEY
         if not self.client.api_key:
-            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前模型: {self.model_name}")
+            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前Dialog类: {self.__class__.__name__}, 当前模型: {self.model_name}")
         try:
-            chat_completion = self.client.chat.completions.create(
-                messages=messages,
-                model=self.model_name,
-                top_p=self.top_p,
-                temperature=self.temperature,
-            )
-            res = chat_completion.choices[0].message.content
+            chat_completion = self._get_chat_completion(messages)
+            content = chat_completion.choices[0].message.content
+            if format_output:
+                res = self.format_response_output(content)
+            else:
+                res = content
+            self.context.add_assistant_message(str(res))
+            return res
         except Exception as e:
             print(f"[ERROR] 获取模型回复失败: {e}")
             res = ''
-        self.context.add_assistant_message(res)
-        return res
+            self.context.add_assistant_message(res)
+            return res
 
-    async def async_send(self, message: str = None, base64_image_list: list = None, image_url_list: list = None) -> str:
+    async def async_send(self, message: str = None, base64_image_list: list = None, image_url_list: list = None, format_output: bool = False) -> any:
         """
-        异步发送消息到模型并获取回复
-        :param message: 用户发送的消息
-        :param base64_image_list:
-        :param image_url_list:
-        :return: 模型的回复
+        异步发送消息到模型，并返回模型回复。
+        :param message: 用户消息
+        :param base64_image_list: base64编码图片列表
+        :param image_url_list: 图片url地址列表
+        :param format_output: 是否格式化输出，如果为True，则返回JSON格式，默认返回原始内容
+        :return: 模型回复或者JSON格式内容
         """
+        # 如果新消息有图片
         if base64_image_list or image_url_list:
             self.context.add_image_message(
                 text_content=message,
                 base64_image_list=base64_image_list,
                 image_url_list=image_url_list
             )
+        # 如果有新消息且没有图片，添加用户消息到上下文
         if message and not base64_image_list and not image_url_list:
             self.context.add_user_message(content=message)
+        # 构建消息列表
         messages = []
+        if format_output:
+            self.context.add_user_message('输出为JSON格式')
         for m in self.context.messages:
             if isinstance(m.get("content"), str):
                 messages.append({"role": m["role"], "content": m["content"]})
             elif isinstance(m.get("content"), list):
                 messages.append({"role": m["role"], "content": m["content"]})
         if not self.async_client.api_key:
-            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前模型: {self.model_name}")
+            raise RuntimeError(f"API KEY未设置，请检查环境变量。当前Dialog类: {self.__class__.__name__}, 当前模型: {self.model_name}")
         try:
-            chat_completion = await self.async_client.chat.completions.create(
-                messages=messages,
-                model=self.model_name,
-                top_p=self.top_p,
-                temperature=self.temperature,
-            )
-            res = chat_completion.choices[0].message.content
+            chat_completion = await self._get_chat_completion_async(messages)
+            content = chat_completion.choices[0].message.content
+            if format_output:
+                res = self.format_response_output(content)
+            else:
+                res = content
+            self.context.add_assistant_message(str(res))
+            return res
         except Exception as e:
             print(f"[ERROR] 获取模型回复失败: {e}")
             res = ''
-        self.context.add_assistant_message(res)
-        return res
+            self.context.add_assistant_message(res)
+            return res
 
 
 class GenericDialog(Dialog):
@@ -212,8 +272,12 @@ class DMXDialog(GenericDialog):
 
 
 if __name__ == '__main__':
-    # 测试代码
-    dialog = VolcDialog(model_name='doubao-pro-256k-241115', system_prompt='解答用户问题')
-    dialog.context.add_user_message(content='但丁真不是中国人但丁真是中国人，这句话怎么理解')
-    dialog.send()
-    print(dialog.context.messages)
+    # dialog = DMXDialog(model_name="deepseek-ai/DeepSeek-V3", area='en')
+    dialog = DMXDialog(model_name='deepseek-ai/DeepSeek-V3',system_prompt='你是AI助手', area='en')
+
+    # 发送测试消息
+    result = dialog.send(
+        message="请告诉我iPhone 15的名称和价格，不同的型号用列表列出，直接用中文回答。",
+        format_output=True
+    )
+    print(result)
