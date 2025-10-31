@@ -207,13 +207,14 @@ class GenericDialog(Dialog):
     def __init__(self, model_name: str, system_prompt: str = "", api_key_env: str = None, base_url: str = None):
         super().__init__(model_name)
         self._context = OpenAIContext(system_prompt=system_prompt)
-        api_key = os.getenv(api_key_env) if api_key_env else None
+        # 初始化时候从环境变量获取API Key，但是实例化之后改变这个变量并不能修改client的api_key属性
+        _tmp_ak_v = os.getenv(api_key_env) if api_key_env else None
         if base_url:
-            self._client = OpenAI(base_url=base_url, api_key=api_key)
-            self._async_client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+            self._client = OpenAI(base_url=base_url, api_key=_tmp_ak_v)
+            self._async_client = AsyncOpenAI(base_url=base_url, api_key=_tmp_ak_v)
         else:
-            self._client = OpenAI(api_key=api_key)
-            self._async_client = AsyncOpenAI(api_key=api_key)
+            self._client = OpenAI(api_key=_tmp_ak_v)
+            self._async_client = AsyncOpenAI(api_key=_tmp_ak_v)
 
     @property
     def context(self):
@@ -270,7 +271,7 @@ class DMXDialog(GenericDialog):
 
 if __name__ == '__main__':
     # dialog = DMXDialog(model_name="deepseek-ai/DeepSeek-V3", area='en')
-    dialog = DMXDialog(model_name='deepseek-ai/DeepSeek-V3',system_prompt='你是AI助手', area='en')
+    dialog = DMXDialog(model_name='deepseek-v3.1',system_prompt='你是AI助手', area='en')
 
     # 发送测试消息
     result = dialog.send(
